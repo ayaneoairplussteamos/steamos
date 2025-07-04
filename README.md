@@ -1,1 +1,3 @@
 Clone from https://gitee.com/honjow/sk-chos-scripts
+
+For installation, run `curl -L "https://raw.githubusercontent.com/ayaneoairplussteamos/steamos/refs/heads/main/steamos/steamos-i.sh" | sh`
