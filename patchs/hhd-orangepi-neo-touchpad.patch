@@ -1,0 +1,423 @@
+diff --git a/controller/const.py b/controller/const.py
+index 5343d9a..b0fa09e 100644
+--- a/controller/const.py
++++ b/controller/const.py
+@@ -53,8 +53,6 @@ AbsAxis = Literal[
+     "right_gyro_y",
+     "right_gyro_z",
+     "right_imu_ts",
+-    "right_touchpad_x",
+-    "right_touchpad_y",
+ ]
+ 
+ RelAxis = Literal["mouse_x", "mouse_y", "mouse_wheel", "mouse_wheel_hires"]
+@@ -96,6 +94,9 @@ GamepadButton = Literal[
+     "touchpad_touch",
+     "touchpad_left",
+     "touchpad_right",
++    "left_touchpad_touch",
++    "left_touchpad_left",
++    "left_touchpad_right",
+ ]
+ 
+ MouseButton = Literal["btn_left", "btn_right", "btn_middle", "btn_side", "btn_extra"]
+diff --git a/controller/virtual/dualsense/__init__.py b/controller/virtual/dualsense/__init__.py
+index ab7756e..3ca7559 100644
+--- a/controller/virtual/dualsense/__init__.py
++++ b/controller/virtual/dualsense/__init__.py
+@@ -52,6 +52,10 @@ REPORT_MIN_DELAY = 1 / DS5_EDGE_MAX_REPORT_FREQ
+ DS5_EDGE_MIN_TIMESTAMP_INTERVAL = 1500
+ MAX_IMU_SYNC_DELAY = 2
+ 
++LEFT_TOUCH_CORRECTION = correct_touchpad(
++    DS5_EDGE_TOUCH_WIDTH, DS5_EDGE_TOUCH_HEIGHT, 1, "left"
++)
++
+ logger = logging.getLogger(__name__)
+ 
+ _cache = ControllerCache()
+@@ -297,7 +301,7 @@ class Dualsense(Producer, Consumer):
+                                 "red": red,
+                                 "blue": blue,
+                                 "green": green,
+-                                "red2": 0, # disable for OXP
++                                "red2": 0,  # disable for OXP
+                                 "blue2": 0,
+                                 "green2": 0,
+                                 "oxp": None,
+@@ -433,6 +437,28 @@ class Dualsense(Producer, Consumer):
+                                 (y & 0x0F) << 4
+                             )
+                             new_rep[self.ofs + 35] = y >> 4
++                        case "left_touchpad_x":
++                            tc = LEFT_TOUCH_CORRECTION
++                            x = int(
++                                min(max(ev["value"], tc.x_clamp[0]), tc.x_clamp[1])
++                                * tc.x_mult
++                                + tc.x_ofs
++                            )
++                            new_rep[self.ofs + 33] = x & 0xFF
++                            new_rep[self.ofs + 34] = (new_rep[self.ofs + 34] & 0xF0) | (
++                                x >> 8
++                            )
++                        case "left_touchpad_y":
++                            tc = LEFT_TOUCH_CORRECTION
++                            y = int(
++                                min(max(ev["value"], tc.y_clamp[0]), tc.y_clamp[1])
++                                * tc.y_mult
++                                + tc.y_ofs
++                            )
++                            new_rep[self.ofs + 34] = (new_rep[self.ofs + 34] & 0x0F) | (
++                                (y & 0x0F) << 4
++                            )
++                            new_rep[self.ofs + 35] = y >> 4
+                         case "gyro_ts" | "accel_ts" | "imu_ts":
+                             send = True
+                             self.last_imu = time.perf_counter()
+@@ -488,7 +514,7 @@ class Dualsense(Producer, Consumer):
+                         )
+                         set_button(
+                             new_rep,
+-                            self.btn_map["touchpad_touch2"],
++                            self.btn_map["left_touchpad_touch"],
+                             ev["value"],
+                         )
+ 
+diff --git a/controller/virtual/dualsense/const.py b/controller/virtual/dualsense/const.py
+index ad90c9a..05b9738 100644
+--- a/controller/virtual/dualsense/const.py
++++ b/controller/virtual/dualsense/const.py
+@@ -169,7 +169,8 @@ get_btn_map = lambda ofs: {
+     "extra_l3": BM(((ofs + 9) << 3) + 4),
+     "share": BM(((ofs + 9) << 3) + 5),
+     "touchpad_touch": BM(((ofs + 32) << 3), flipped=True),
+-    "touchpad_touch2": BM(((ofs + 36) << 3), flipped=True),
++    # "touchpad_touch2": BM(((ofs + 36) << 3), flipped=True),
++    "left_touchpad_touch": BM(((ofs + 36) << 3), flipped=True),
+     "touchpad_left": BM(((ofs + 9) << 3) + 6),
+     "mode": BM(((ofs + 9) << 3) + 7),
+ }
+diff --git a/controller/virtual/uinput/const.py b/controller/virtual/uinput/const.py
+index 62b893c..9bd12ae 100644
+--- a/controller/virtual/uinput/const.py
++++ b/controller/virtual/uinput/const.py
+@@ -528,3 +528,14 @@ TOUCHPAD_BUTTON_MAP: dict[Button, int] = {
+     "touchpad_right": B("BTN_RIGHT"),
+     "touchpad_left": B("BTN_LEFT"),
+ }
++
++LEFT_TOUCHPAD_AXIS_MAP: dict[Axis, AX] = {
++    "left_touchpad_x": AX(B("ABS_X"), 1023, bounds=(0, 2048)),
++    "left_touchpad_y": AX(B("ABS_Y"), 1023, bounds=(0, 2048)),
++}
++
++LEFT_TOUCHPAD_BUTTON_MAP: dict[Button, int] = {
++    "left_touchpad_touch": B("BTN_TOUCH"),
++    "left_touchpad_right": B("BTN_RIGHT"),
++    "left_touchpad_left": B("BTN_LEFT"),
++}
+diff --git a/device/orange_pi/__init__.py b/device/orange_pi/__init__.py
+index a86acc0..f2bd2c4 100644
+--- a/device/orange_pi/__init__.py
++++ b/device/orange_pi/__init__.py
+@@ -11,6 +11,7 @@ from hhd.plugins import (
+     get_outputs_config,
+     load_relative_yaml,
+ )
++from hhd.plugins.inputs import get_touchpad_config
+ from hhd.plugins.settings import HHDSettings
+ 
+ from .const import CONFS, DEFAULT_MAPPINGS, get_default_config
+@@ -52,6 +53,13 @@ class GenericControllersPlugin(HHDPlugin):
+             )
+         )
+ 
++        if self.dconf.get("touchpad", False):
++            base["controllers"]["handheld"]["children"][
++                "touchpad"
++            ] = get_touchpad_config(dual_touchpad=True)
++        else:
++            del base["controllers"]["handheld"]["children"]["touchpad"]
++
+         base["controllers"]["handheld"]["children"]["imu_axis"] = get_gyro_config(
+             self.dconf.get("mapping", DEFAULT_MAPPINGS)
+         )
+diff --git a/device/orange_pi/base.py b/device/orange_pi/base.py
+index 0bb1575..a5deac5 100644
+--- a/device/orange_pi/base.py
++++ b/device/orange_pi/base.py
+@@ -1,5 +1,6 @@
+ import logging
+ import os
++import re
+ import select
+ import time
+ from threading import Event as TEvent
+@@ -7,6 +8,7 @@ from threading import Event as TEvent
+ import evdev
+ 
+ from hhd.controller import Multiplexer, DEBUG_MODE
++from hhd.controller.base import TouchpadAction
+ from hhd.controller.lib.hide import unhide_all
+ from hhd.controller.physical.evdev import B as EC
+ from hhd.controller.physical.evdev import GenericGamepadEvdev
+@@ -14,7 +16,15 @@ from hhd.controller.physical.imu import CombinedImu, HrtimerTrigger
+ from hhd.controller.physical.rgb import LedDevice
+ from hhd.plugins import Config, Context, Emitter, get_gyro_state, get_outputs
+ 
+-from .const import AT_BTN_MAPPINGS, GAMEPAD_BTN_MAPPINGS, DEFAULT_MAPPINGS
++from .const import (
++    AT_BTN_MAPPINGS,
++    GAMEPAD_BTN_MAPPINGS,
++    DEFAULT_MAPPINGS,
++    OPI_TOUCHPAD_AXIS_MAP,
++    OPI_TOUCHPAD_BUTTON_MAP,
++    LEFT_TOUCHPAD_AXIS_MAP,
++    LEFT_TOUCHPAD_BUTTON_MAP,
++)
+ 
+ ERROR_DELAY = 1
+ SELECT_TIMEOUT = 1
+@@ -27,6 +37,9 @@ GAMEPAD_PIDS = [0x028E, 0x181C]
+ KBD_VID = 0x0001
+ KBD_PID = 0x0001
+ 
++TOUCHPAD_VID = 0x0911
++TOUCHPAD_PID = 0x5288
++
+ BACK_BUTTON_DELAY = 0.1
+ 
+ 
+@@ -90,13 +103,15 @@ def controller_loop(
+     conf: Config, should_exit: TEvent, updated: TEvent, dconf: dict, emit: Emitter
+ ):
+     debug = DEBUG_MODE
++    has_touchpad = dconf.get("touchpad", False)
+ 
+     # Output
+     d_producers, d_outs, d_params = get_outputs(
+         conf["controller_mode"],
+-        None,
++        conf["touchpad"] if has_touchpad else None,
+         conf["imu"].to(bool),
+         emit=emit,
++        dual_touchpad=True
+     )
+     motion = d_params.get("uses_motion", True) and conf.get("imu", True)
+ 
+@@ -136,13 +151,26 @@ def controller_loop(
+         btn_map=dconf.get("gamepad_mapping", GAMEPAD_BTN_MAPPINGS),
+     )
+ 
+-    multiplexer = Multiplexer(
+-        trigger="analog_to_discrete",
+-        dpad="analog_to_discrete",
+-        share_to_qam=True,
+-        nintendo_mode=conf["nintendo_mode"].to(bool),
+-        emit=emit,
+-        params=d_params,
++    d_touch = GenericGamepadEvdev(
++        vid=[TOUCHPAD_VID],
++        pid=[TOUCHPAD_PID],
++        name=[re.compile("OPI0002.+Touchpad")],
++        capabilities={EC("EV_KEY"): [EC("BTN_MOUSE")]},
++        btn_map=OPI_TOUCHPAD_BUTTON_MAP,
++        axis_map=OPI_TOUCHPAD_AXIS_MAP,
++        aspect_ratio=1,
++        required=True,
++    )
++
++    d_touch_left = GenericGamepadEvdev(
++        vid=[TOUCHPAD_VID],
++        pid=[TOUCHPAD_PID],
++        name=[re.compile("OPI0001.+Touchpad")],
++        capabilities={EC("EV_KEY"): [EC("BTN_MOUSE")]},
++        btn_map=LEFT_TOUCHPAD_BUTTON_MAP,
++        axis_map=LEFT_TOUCHPAD_AXIS_MAP,
++        aspect_ratio=1,
++        required=True,
+     )
+ 
+     # d_volume_btn = UInputDevice(
+@@ -162,6 +190,36 @@ def controller_loop(
+     if d_rgb.supported:
+         logger.info(f"RGB Support activated through kernel driver.")
+ 
++    
++    if has_touchpad:
++        touch_actions = (
++            conf["touchpad.controller"]
++            if conf["touchpad.mode"].to(TouchpadAction) == "controller"
++            else conf["touchpad.emulation"]
++        )
++
++        multiplexer = Multiplexer(
++            trigger="analog_to_discrete",
++            dpad="analog_to_discrete",
++            share_to_qam=True,
++            touchpad_short=touch_actions["short"].to(TouchpadAction),
++            touchpad_hold=touch_actions["hold"].to(TouchpadAction),
++            nintendo_mode=conf["nintendo_mode"].to(bool),
++            emit=emit,
++            params=d_params,
++            qam_multi_tap=False,
++        )
++    else:
++        multiplexer = Multiplexer(
++            trigger="analog_to_discrete",
++            dpad="analog_to_discrete",
++            share_to_qam=True,
++            nintendo_mode=conf["nintendo_mode"].to(bool),
++            emit=emit,
++            params=d_params,
++            qam_multi_tap=False,
++        )
++
+     REPORT_FREQ_MIN = 25
+     REPORT_FREQ_MAX = 400
+ 
+@@ -191,6 +249,9 @@ def controller_loop(
+                 start_imu = d_timer.open()
+             if start_imu:
+                 prepare(d_imu)
++        if has_touchpad and d_params["uses_touch"]:
++            prepare(d_touch)
++            prepare(d_touch_left)
+         prepare(d_kbd_1)
+         prepare(d_kbd_2)
+         for d in d_producers:
+diff --git a/device/orange_pi/const.py b/device/orange_pi/const.py
+index a85c2f7..c2b9636 100644
+--- a/device/orange_pi/const.py
++++ b/device/orange_pi/const.py
+@@ -2,6 +2,36 @@ from hhd.controller import Axis, Button, Configuration
+ from hhd.controller.physical.evdev import B, to_map
+ from hhd.plugins import gen_gyro_state
+ 
++OPI_TOUCHPAD_BUTTON_MAP: dict[int, Button] = to_map(
++    {
++        "touchpad_touch": [B("BTN_TOOL_FINGER")],  # also BTN_TOUCH
++        "touchpad_right": [B("BTN_TOOL_DOUBLETAP"), B("BTN_RIGHT")],
++        "touchpad_left": [B("BTN_MOUSE")],
++    }
++)
++
++OPI_TOUCHPAD_AXIS_MAP: dict[int, Axis] = to_map(
++    {
++        "touchpad_x": [B("ABS_X")],  # also ABS_MT_POSITION_X
++        "touchpad_y": [B("ABS_Y")],  # also ABS_MT_POSITION_Y
++    }
++)
++
++LEFT_TOUCHPAD_BUTTON_MAP: dict[int, Button] = to_map(
++    {
++        "touchpad_touch": [B("BTN_TOOL_FINGER")],  # also BTN_TOUCH
++        "left_touchpad_right": [B("BTN_TOOL_DOUBLETAP"), B("BTN_RIGHT")],
++        "left_touchpad_left": [B("BTN_MOUSE")],
++    }
++)
++
++LEFT_TOUCHPAD_AXIS_MAP: dict[int, Axis] = to_map(
++    {
++        "left_touchpad_x": [B("ABS_X")],  # also ABS_MT_POSITION_X
++        "left_touchpad_y": [B("ABS_Y")],  # also ABS_MT_POSITION_Y
++    }
++)
++
+ DEFAULT_MAPPINGS: dict[str, tuple[Axis, str | None, float, float | None]] = {
+     "accel_x": ("accel_x", "accel", 1, None),
+     "accel_y": ("accel_z", "accel", 1, None),
+@@ -31,7 +61,7 @@ GAMEPAD_BTN_MAPPINGS: dict[int, str] = {
+ CONFS = {
+     # New hardware new firmware, the unit below was dissassembled
+     # "G1621-02": {"name": "OrangePi G1621-02/G1621-02", "hrtimer": True},
+-    "NEO-01": {"name": "OrangePi NEO-01/NEO-01", "hrtimer": True},
++    "NEO-01": {"name": "OrangePi NEO-01/NEO-01", "hrtimer": True, "touchpad": True},
+ }
+ 
+ 
+diff --git a/device/orange_pi/controllers.yml b/device/orange_pi/controllers.yml
+index 042af66..7d3cf5a 100644
+--- a/device/orange_pi/controllers.yml
++++ b/device/orange_pi/controllers.yml
+@@ -33,6 +33,8 @@ children:
+   
+   imu_axis:
+ 
++  touchpad:
++
+   nintendo_mode:
+     type: bool
+     title: Nintendo Mode (A-B Swap)
+diff --git a/plugins/inputs.py b/plugins/inputs.py
+index 81ff934..c77d88b 100644
+--- a/plugins/inputs.py
++++ b/plugins/inputs.py
+@@ -22,9 +22,11 @@ def get_vendor():
+         return "Uknown"
+ 
+ 
+-def get_touchpad_config():
+-    return load_relative_yaml("touchpad.yml")
+-
++def get_touchpad_config(dual_touchpad: bool = False):
++    conf = load_relative_yaml("touchpad.yml")
++    if dual_touchpad:
++        del conf["modes"]['controller']["children"]["correction"]
++    return conf
+ 
+ def get_gyro_config(
+     mapping: dict[str, tuple[Axis, str | None, float, float | None]] | None
+diff --git a/plugins/outputs.py b/plugins/outputs.py
+index c38d220..28b9089 100644
+--- a/plugins/outputs.py
++++ b/plugins/outputs.py
+@@ -17,6 +17,8 @@ from ..controller.virtual.uinput import (
+     TOUCHPAD_BUTTON_MAP,
+     TOUCHPAD_CAPABILITIES,
+     XBOX_ELITE_BUTTON_MAP,
++    LEFT_TOUCHPAD_BUTTON_MAP,
++    LEFT_TOUCHPAD_AXIS_MAP,
+     UInputDevice,
+ )
+ from .plugin import is_steam_gamepad_running, open_steam_kbd
+@@ -38,6 +40,7 @@ def get_outputs(
+     rgb_modes: Mapping[RgbMode, Sequence[RgbSettings]] | None = None,
+     rgb_zones: RgbZones = "mono",
+     controller_disabled: bool = False,
++    dual_touchpad: bool = False,
+ ) -> tuple[Sequence[Producer], Sequence[Consumer], Mapping[str, Any]]:
+     producers = []
+     consumers = []
+@@ -47,7 +50,10 @@ def get_outputs(
+     desktop_disable = False
+     if touch_conf is not None:
+         touchpad = touch_conf["mode"].to(str)
+-        correction = touch_conf["controller.correction"].to(TouchpadCorrectionType)
++        if dual_touchpad:
++            correction = "right"
++        else:
++            correction = touch_conf["controller.correction"].to(TouchpadCorrectionType)
+         if touchpad in ("emulation", "controller"):
+             desktop_disable = touch_conf[touchpad]["desktop_disable"].to(bool)
+     else:
+@@ -220,6 +226,19 @@ def get_outputs(
+         )
+         producers.append(d)
+         consumers.append(d)
++        if dual_touchpad:
++            d = UInputDevice(
++                name="Handheld Daemon Left Touchpad",
++                phys="phys-hhd-left",
++                capabilities=TOUCHPAD_CAPABILITIES,
++                pid=HHD_PID_TOUCHPAD,
++                btn_map=LEFT_TOUCHPAD_BUTTON_MAP,
++                axis_map=LEFT_TOUCHPAD_AXIS_MAP,
++                output_timestamps=True,
++                ignore_cmds=True,
++            )
++            producers.append(d)
++            consumers.append(d)
+         uses_touch = True
+ 
+     return (

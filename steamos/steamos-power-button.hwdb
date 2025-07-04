@@ -1,0 +1,43 @@
+# This is the "AT Translated Set 2 keyboard" the BIOS uses to convey power button presses
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnValve:*
+# ASUS Rog Ally
+evdev:name:Power Button:dmi:*svnASUSTeKCOMPUTERINC.:*rnRC71L:*
+# ASUS Rog Ally X
+evdev:name:Power Button:dmi:*svnASUSTeKCOMPUTERINC.:*rnRC72LA:*
+# AYANEO
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnAYANEO:*
+evdev:name:Power Button:dmi:*svnAYANEO:*
+# AYN
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnayn:*
+evdev:name:Power Button:dmi:*svnayn:*
+# GPD
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnGPD:*
+evdev:name:Power Button:dmi:*svnGPD:*
+# Lenovo Legion Go
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnLENOVO:pn83E1:*
+evdev:name:Power Button:dmi:*svnLENOVO:pn83E1:*
+# Lenovo Legion Go S
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnLENOVO:pn83L3:*
+evdev:name:Power Button:dmi:*svnLENOVO:pn83L3:*
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnLENOVO:pn83N6:*
+evdev:name:Power Button:dmi:*svnLENOVO:pn83N6:*
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnLENOVO:pn83Q2:*
+evdev:name:Power Button:dmi:*svnLENOVO:pn83Q2:*
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnLENOVO:pn83Q3:*
+evdev:name:Power Button:dmi:*svnLENOVO:pn83Q3:*
+# MSI
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnMicro-StarInternationalCo.,Ltd.:pnClawA1M:*
+evdev:name:Power Button:dmi:*svnMicro-StarInternationalCo.,Ltd.:pnClawA1M:*
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnMicro-StarInternationalCo.,Ltd.:pnClaw7AI+A2VM:*
+evdev:name:Power Button:dmi:*svnMicro-StarInternationalCo.,Ltd.:pnClaw7AI+A2VM:*
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnMicro-StarInternationalCo.,Ltd.:pnClaw8AI+A2VM:*
+evdev:name:Power Button:dmi:*svnMicro-StarInternationalCo.,Ltd.:pnClaw8AI+A2VM:*
+# ONEXPLAYER
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnONE-NETBOOK:*
+evdev:name:Power Button:dmi:*svnONE-NETBOOK:*
+# OrangePi
+evdev:name:AT Translated Set 2 keyboard:dmi:*svnOrangePi:*
+evdev:name:Power Button:dmi:*svnOrangePi:*
+# ZOTAC Gaming Zone
+evdev:name:Power Button:dmi:*svnZOTAC:*rnG0A1W:*
+ STEAMOS_POWER_BUTTON=1
